@@ -1,5 +1,0 @@
-<?xml version="1.0"?>
-<typeA attr1="val1" attr2="true">
-    <typeC attr2="42" attr3="val2" />
-    <fieldA>A</fieldA>
-</typeA>
