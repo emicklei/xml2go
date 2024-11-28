@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"io"
 	"log/slog"
+	"strings"
 )
 
 func (b *builder) parse(f io.Reader) error {
@@ -35,17 +36,15 @@ func (b *builder) parse(f io.Reader) error {
 }
 
 type builder struct {
-	StructsMap  map[string]Gostruct
-	structStack *stack[Gostruct]
-	fieldStack  *stack[Gofield]
-	lastDATA    string
+	StructsMap map[string]Gostruct
+	nodeStack  *stack[node]
+	lastDATA   string
 }
 
 func NewBuilder() *builder {
 	return &builder{
-		StructsMap:  make(map[string]Gostruct),
-		structStack: new(stack[Gostruct]),
-		fieldStack:  new(stack[Gofield]),
+		StructsMap: make(map[string]Gostruct),
+		nodeStack:  new(stack[node]),
 	}
 }
 
@@ -54,38 +53,51 @@ func (b *builder) data(text string) {
 }
 
 func (b *builder) begin(elem xml.StartElement) {
-	fieldAttrs := fieldAttributes(elem)
-	if len(fieldAttrs) > 0 || b.structStack.empty() {
-		s := newStruct(title(elem.Name.Local))
-		for _, each := range fieldAttrs {
-			s = s.withField(Gofield{Name: title(each.Name.Local), isAttr: true, XMLtag: each.Name.Local, Typ: "string"})
-		}
-		b.structStack.push(s)
-		return
+	n := node{
+		name:   elem.Name.Local,
+		attrs:  fieldAttributes(elem),
+		xmltag: elem.Name.Local,
 	}
-	// no attr
-	f := Gofield{Name: title(elem.Name.Local), XMLtag: elem.Name.Local, Typ: "string"}
-	b.fieldStack.push(f)
+	b.nodeStack.push(n)
 }
 func (b *builder) end(elem xml.EndElement) {
-	// end of struct or end of field
-	if !b.structStack.empty() {
-		s := b.structStack.top()
-		// closes top struct?
-		if s.Name == title(elem.Name.Local) {
+	n := b.nodeStack.pop()
+	// closing top node?
+	if n.name == elem.Name.Local {
+		if b.nodeStack.empty() {
+			s := b.makeStruct(n)
 			b.StructsMap[s.Name] = s
-			b.structStack.pop()
-			return
+		} else {
+			// add to parent
+			p := b.nodeStack.pop()
+			p.nodes = append(p.nodes, n)
+			b.nodeStack.push(p)
 		}
+	} else {
+		// new child
+		n.nodes = append(n.nodes, n)
+		b.nodeStack.push(n)
 	}
-	// closes top field?
-	if !b.fieldStack.empty() {
-		f := b.fieldStack.pop()
-		if !b.structStack.empty() {
-			s := b.structStack.pop()
-			b.structStack.push(s.withField(f))
-			return
-		}
+	// slog.Warn("unmatched", "end", elem.Name.Local)
+}
+
+func (b *builder) makeStruct(n node) Gostruct {
+	s := newStruct(strings.Title(n.name))
+	for _, each := range n.attrs {
+		f := newField(strings.Title(each.Name.Local), each.Name.Local, true)
+		s = s.withField(f)
 	}
-	slog.Warn("unmatched", "end", elem.Name.Local)
+	for _, each := range n.nodes {
+		f := newField(strings.Title(each.name), each.xmltag, false)
+		f.Typ = strings.Title(each.name)
+		s = s.withField(f)
+	}
+	return s
+}
+
+type node struct {
+	name   string
+	attrs  []xml.Attr
+	xmltag string
+	nodes  []node
 }

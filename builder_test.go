@@ -98,4 +98,5 @@ func TestOneNestedType(t *testing.T) {
 	s := b.StructsMap["TypeA"]
 	assert.Equal(t, 1, len(s.Fields))
 	assert.Equal(t, "TypeB", s.Fields["TypeB"].Typ)
+	t.Log(s.String())
 }

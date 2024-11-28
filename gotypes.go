@@ -17,6 +17,15 @@ func newStruct(name string) Gostruct {
 	}
 }
 
+func newField(name, xmltag string, isAttr bool) Gofield {
+	return Gofield{
+		Name:   strings.Title(name),
+		Typ:    "string",
+		XMLtag: xmltag,
+		isAttr: isAttr,
+	}
+}
+
 func (s Gostruct) withField(f Gofield) Gostruct {
 	// for now override
 	e, ok := s.Fields[f.Name]
